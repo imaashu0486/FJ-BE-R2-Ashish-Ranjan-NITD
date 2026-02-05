@@ -1,7 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import User
+from core.models import Currency
 
-class Category(models.Model):
+
+class Transaction(models.Model):
     INCOME = "INCOME"
     EXPENSE = "EXPENSE"
 
@@ -11,17 +13,50 @@ class Category(models.Model):
     ]
 
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="categories"
+        User, on_delete=models.CASCADE, related_name="transactions"
     )
-    name = models.CharField(max_length=100)
-    category_type = models.CharField(
+
+    category = models.ForeignKey(
+        "Category",
+        on_delete=models.PROTECT,
+        related_name="transactions"
+    )
+
+    transaction_type = models.CharField(
         max_length=10, choices=TYPE_CHOICES
     )
 
+    amount = models.DecimalField(
+        max_digits=12, decimal_places=2
+    )
+
+    currency = models.ForeignKey(
+        Currency, on_delete=models.PROTECT
+    )
+
+    amount_in_inr = models.DecimalField(
+        max_digits=12, decimal_places=2, editable=False
+    )
+
+    date = models.DateField()
+    description = models.TextField(blank=True)
+
+    is_refund = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        unique_together = ("user", "name", "category_type")
+    def save(self, *args, **kwargs):
+        """
+        Normalize all amounts to INR for reporting & performance.
+        Refunds are stored as negative values internally.
+        """
+        normalized = self.amount * self.currency.exchange_rate_to_inr
+
+        if self.transaction_type == self.EXPENSE and self.is_refund:
+            normalized = -abs(normalized)
+
+        self.amount_in_inr = normalized
+        super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.name} ({self.category_type})"
+        return f"{self.user} - {self.amount} {self.currency.code}"
