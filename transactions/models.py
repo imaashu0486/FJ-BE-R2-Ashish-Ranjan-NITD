@@ -58,5 +58,9 @@ class Transaction(models.Model):
         self.amount_in_inr = normalized
         super().save(*args, **kwargs)
 
+# NOTE:
+# After saving an EXPENSE transaction, we can check
+# if the related budget is exceeded and trigger notifications.
+
     def __str__(self):
         return f"{self.user} - {self.amount} {self.currency.code}"
